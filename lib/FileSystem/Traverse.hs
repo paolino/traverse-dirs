@@ -5,7 +5,6 @@ module FileSystem.Traverse where
 import Control.Exception (IOException, handle)
 import Control.Pipe
     ( Input (Input, NoInput)
-    , Pipe (Effect, Element, End)
     , Pipe (..)
     , filterFoldingInput
     , filterMaybePipe
@@ -107,8 +106,9 @@ sourceDirs = no
                     pure
                         $ if isDir
                             then go (Input cPath) s
-                            else Element (TriedFile $ Succeeded cPath)
-                                        $ no s
+                            else
+                                Element (TriedFile $ Succeeded cPath)
+                                    $ no s
         Element d s -> Element (TriedDir d) $ no s
         Feedback f -> go l $ f l
 
@@ -117,7 +117,7 @@ sourceDirs = no
     no = go NoInput
 
 -- | A pipe that filters out the duplicates in the input.
-uniqueInput :: Ord o => Pipe IO o b -> Pipe IO o b
+uniqueInput :: (Ord o) => Pipe IO o b -> Pipe IO o b
 uniqueInput = filterFoldingInput f mempty
   where
     f s x = if Set.member x s then (s, False) else (Set.insert x s, True)
