@@ -5,7 +5,7 @@ module FileSystem.Traverse where
 import Control.Exception (IOException, handle)
 import Control.Pipe
     ( Input (Input, NoInput)
-    , Output (Effect, Element, End)
+    , Pipe (Effect, Element, End)
     , Pipe (..)
     , filterFoldingInput
     , filterMaybePipe
@@ -24,11 +24,11 @@ import Prelude
 data Tried
     = Failed FilePath IOException
     | Succeeded FilePath
-    deriving (Show)
+    deriving (Show, Eq)
 
 -- | Differenciate between a file and a directory that was tried in IO.
 data TriedAny = TriedFile Tried | TriedDir Tried
-    deriving (Show)
+    deriving (Show, Eq)
 
 -- | Extract the path and the exception from a 'TriedAny' element.
 triedFailed :: TriedAny -> Maybe (FilePath, IOException)
@@ -57,8 +57,7 @@ handleIOException
     -> IO (Pipe IO i e)
     -- ^ Action that returns the pipe or throws an exception
     -> IO (Pipe IO i e)
-handleIOException x failed s = handle $ \e -> pure . Pipe $ \_ ->
-    Element (failed x e) s
+handleIOException x failed s = handle $ \e -> pure $ Element (failed x e) s
 
 -- | Output the content of the directories in the list of roots + the content
 -- of the rest of the directories received as input.
@@ -73,7 +72,7 @@ listDir
     -> Pipe IO FilePath Tried
 listDir = go . sort
   where
-    go rest = Pipe $ \case
+    go rest = Feedback $ \case
         Input path -> Effect
             $ handleIOException path Failed (go rest)
             $ do
@@ -96,7 +95,7 @@ sourceDirs = no
         :: Input FilePath
         -> Pipe IO FilePath Tried
         -> Pipe IO i TriedAny
-    go l (Pipe f) = Pipe $ \_ -> case f l of
+    go l = \case
         End -> End
         Effect m -> Effect $ no <$> m
         Element (Succeeded path) s ->
@@ -108,11 +107,11 @@ sourceDirs = no
                     pure
                         $ if isDir
                             then go (Input cPath) s
-                            else Pipe
-                                $ \_ ->
-                                    Element (TriedFile $ Succeeded cPath)
+                            else Element (TriedFile $ Succeeded cPath)
                                         $ no s
         Element d s -> Element (TriedDir d) $ no s
+        Feedback f -> go l $ f l
+
     handling path s =
         handleIOException path (\fp e -> TriedFile $ Failed fp e) $ no s
     no = go NoInput

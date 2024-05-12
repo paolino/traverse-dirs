@@ -133,3 +133,8 @@ test-suite traverse-dirs-test
   build-depends:
     , base  ^>=4.19.1.0
     , traverse-dirs
+    , directory
+    , filepath
+    , temporary
+    , hspec
+    , hspec-expectations
