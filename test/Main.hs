@@ -1,9 +1,12 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Main (main) where
 
 import Control.Pipe
     ( breakPipe
+    , contramapPipe
+    , contramapStep
     , feedbackPipe
-    , filterInput
     , filterPipe
     , fromListSource
     , monoidSink
@@ -119,6 +122,7 @@ test_feedbackPipe =
         p =
             runIdentity
                 . toListSink
+                . contramapStep 0
                 . feedbackPipe
                 . reinforcePipe (+)
                 . fromListSource
@@ -131,8 +135,9 @@ test_filterInput =
         p =
             runIdentity
                 . toListSink
+                . contramapStep 0
                 . feedbackPipe
-                . filterInput even
+                . contramapPipe (\x -> if even x then x else 0)
                 . reinforcePipe (+)
                 . fromListSource
      in

@@ -61,6 +61,7 @@ library
   -- Modules exported by the library.
   exposed-modules:
     Control.Pipe
+    Control.Bandwidth
     FileSystem.Traverse
 
   -- Modules included in this library but not exported.
@@ -71,16 +72,19 @@ library
 
   -- Other library packages from which modules are imported.
   build-depends:
+    , async ==2.2.5
     , base
     , containers
     , directory
     , filepath
+    , stm
+    , mtl
+
 
   -- Directories containing source files.
   hs-source-dirs:   lib
 
   -- Base language which the package is written in.
-  default-language: GHC2021
 
 executable traverse-dirs
   -- Import common warning flags.
@@ -105,14 +109,12 @@ executable traverse-dirs
   hs-source-dirs:   exe
 
   -- Base language which the package is written in.
-  default-language: GHC2021
 
 test-suite traverse-dirs-test
   -- Import common warning flags.
   import:           warnings
 
   -- Base language which the package is written in.
-  default-language: GHC2021
 
   -- Modules included in this executable, other than Main.
   -- other-modules:

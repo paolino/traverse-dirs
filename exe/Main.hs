@@ -1,5 +1,6 @@
 module Main where
 
+import qualified Control.Bandwidth as Bandwidth
 import FileSystem.Traverse
     ( countFiles
     , printOnlyExceptions
@@ -7,9 +8,12 @@ import FileSystem.Traverse
     )
 import System.Environment (getArgs)
 
-main :: IO ()
-main = do
+main1 :: IO ()
+main1 = do
     roots <- getArgs
     printOnlyFiles roots
     printOnlyExceptions roots
     countFiles roots >>= print
+
+main :: IO ()
+main = Bandwidth.test
