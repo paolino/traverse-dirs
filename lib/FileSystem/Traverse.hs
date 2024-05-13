@@ -1,16 +1,17 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 
 module FileSystem.Traverse where
 
 import Control.Exception (IOException, handle)
 import Control.Pipe
-    ( Input (Input, NoInput)
-    , Pipe (..)
-    , filterFoldingInput
+    ( Pipe (..)
     , filterMaybePipe
     , foldSink
     , mapPipe
     , putStrLnSink
+    , runPipe
+    , scanInputPipe
     )
 import Data.List (sort)
 import Data.Set qualified as Set
@@ -58,6 +59,8 @@ handleIOException
     -> IO (Pipe IO i e)
 handleIOException x failed s = handle $ \e -> pure $ Element (failed x e) s
 
+data Input = NewDir FilePath | NextFile
+
 -- | Output the content of the directories in the list of roots + the content
 -- of the rest of the directories received as input.
 -- The output is a 'TriedPath' element with the exception if an IOException
@@ -68,16 +71,16 @@ handleIOException x failed s = handle $ \e -> pure $ Element (failed x e) s
 listDir
     :: [FilePath]
     -- ^ Roots of the directories to be scanneed
-    -> Pipe IO FilePath Tried
+    -> Pipe IO Input Tried
 listDir = go . sort
   where
     go rest = Feedback $ \case
-        Input path -> Effect
+        NewDir path -> Effect
             $ handleIOException path Failed (go rest)
             $ do
                 files <- sort <$> listDirectory path
                 pure $ go $ fmap (path </>) files <> rest
-        NoInput -> case rest of
+        NextFile -> case rest of
             [] -> End
             (p : ps) -> Element (Succeeded p) (go ps)
 
@@ -86,13 +89,13 @@ listDir = go . sort
 -- If the output is a failure it's passed over as a failed 'TriedDir' element.
 -- If the output is a success, it's passed over as a success 'TriedFile' element.
 sourceDirs
-    :: Pipe IO FilePath Tried
+    :: Pipe IO Input Tried
     -> Pipe IO i TriedAny
 sourceDirs = no
   where
     go
-        :: Input FilePath
-        -> Pipe IO FilePath Tried
+        :: Input
+        -> Pipe IO Input Tried
         -> Pipe IO i TriedAny
     go l = \case
         End -> End
@@ -105,7 +108,7 @@ sourceDirs = no
                     isDir <- doesDirectoryExist cPath
                     pure
                         $ if isDir
-                            then go (Input cPath) s
+                            then go (NewDir cPath) s
                             else
                                 Element (TriedFile $ Succeeded cPath)
                                     $ no s
@@ -114,13 +117,17 @@ sourceDirs = no
 
     handling path s =
         handleIOException path (\fp e -> TriedFile $ Failed fp e) $ no s
-    no = go NoInput
+    no = go NextFile
 
 -- | A pipe that filters out the duplicates in the input.
-uniqueInput :: (Ord o) => Pipe IO o b -> Pipe IO o b
-uniqueInput = filterFoldingInput f mempty
+uniqueInput :: Pipe IO Input o -> Pipe IO Input o
+uniqueInput = scanInputPipe f mempty
   where
-    f s x = if Set.member x s then (s, False) else (Set.insert x s, True)
+    f s (NewDir x) =
+        if Set.member x s
+            then (s, NextFile)
+            else (Set.insert x s, NewDir x)
+    f s NextFile = (s, NextFile)
 
 traverseDirs :: [FilePath] -> Pipe IO i TriedAny
 traverseDirs roots =
@@ -137,7 +144,7 @@ printOnlyExceptions roots =
 
 printOnlyFiles :: [FilePath] -> IO ()
 printOnlyFiles roots =
-    putStrLnSink
+    runPipe putStrLn (pure NextFile)
         $ filterMaybePipe triedSuccess
         $ traverseDirs roots
 
